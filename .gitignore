@@ -22,8 +22,6 @@ python/dist/
 python/*.spec
 python/venv/
 python/bin/
-python/audios/
-python/videos/
 
 # Sistema
 .DS_Store
