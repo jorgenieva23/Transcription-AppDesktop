@@ -9,10 +9,11 @@
   },
   "files": [
     "dist",
-    "dist-electron"
+    "dist-electron",
     "python/dist/transcriptor.exe",
     "python/videos/**/*",
-    "python/audios/**/*"
+    "python/audios/**/*",
+    "python/bin/**/*"
   ],
   "mac": {
     "target": [
@@ -29,7 +30,7 @@
         ]
       }
     ],
-    "sign": false,
+    "signAndEditExecutable": false,
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
   },
   "nsis": {
