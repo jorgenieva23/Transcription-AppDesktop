@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import reactLogo from "./assets/react.svg";
 import viteLogo from "/electron-vite.animate.svg";
 import "./App.css";
 
 type ElectronAPI = {
-  runTranscriptor: (file: string) => Promise<string>;
+  runTranscriptor: (file: string, outputPath: string) => Promise<string>;
+  showSaveDialog: () => Promise<string | undefined>;
 };
 
 declare global {
@@ -15,15 +16,26 @@ declare global {
 
 function App() {
   const [count, setCount] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTranscribir = async () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      alert("Seleccioná un archivo primero");
+      return;
+    }
+
+    // Pedir ruta de guardado al usuario
+    const outputPath = await window.electronAPI.showSaveDialog();
+    if (!outputPath) return;
+
     try {
-      console.log("window.electronAPI:", window.electronAPI);
-      const result = await window.electronAPI.runTranscriptor("miArchivo.docx");
-      console.log("RESULTADO:", result);
+      const result = await window.electronAPI.runTranscriptor(
+        file.path,
+        outputPath
+      );
       alert(result);
     } catch (err) {
-      console.error("ERROR:", err);
       alert("Ocurrió un error, revisá la consola");
     }
   };
@@ -44,8 +56,8 @@ function App() {
           count is {count}
         </button>
 
-        {/* 👇 Tu botón para lanzar Python */}
-        <button onClick={handleTranscribir}>Transcribir video</button>
+        <input type="file" ref={fileInputRef} accept="video/*,audio/*" />
+        <button onClick={handleTranscribir}>Transcribir video/audio</button>
 
         <p>
           Edit <code>src/App.tsx</code> and save to test HMR

@@ -1,39 +1,57 @@
 import o from "path";
-import { fileURLToPath as w } from "url";
-import { spawn as f } from "child_process";
-import { app as e, ipcMain as y, BrowserWindow as j } from "electron";
-const u = w(import.meta.url), n = o.dirname(u);
-let i = null;
-function x() {
-  i = new j({
+import { fileURLToPath as y } from "url";
+import { spawn as g } from "child_process";
+import { app as e, ipcMain as p, dialog as x, BrowserWindow as j } from "electron";
+const P = y(import.meta.url), t = o.dirname(P);
+let a = null;
+function E() {
+  a = new j({
     width: 1e3,
     height: 700,
     webPreferences: {
       contextIsolation: !0,
-      preload: o.join(n, "preload.mjs")
+      preload: o.join(t, "preload.mjs")
     }
-  }), e.isPackaged ? i.loadFile(o.join(n, "../dist/index.html")) : i.loadURL("http://localhost:5173");
+  }), e.isPackaged ? a.loadFile(o.join(t, "../dist/index.html")) : a.loadURL("http://localhost:5173");
 }
-e.whenReady().then(x);
-y.handle("run-transcriptor", async (P, a) => new Promise((d, p) => {
-  const l = o.join(n, "../python/dist/transcription.exe"), h = o.join(n, "../python/venv/Scripts/python.exe"), m = e.isPackaged ? [a || "transcripcion.docx"] : [
-    o.join(n, "../python/transcription.py"),
-    a || "transcripcion.docx"
-  ], r = f(e.isPackaged ? l : h, m, {
-    cwd: o.join(n, "../python")
+e.whenReady().then(E);
+p.handle("show-save-dialog", async () => {
+  const { canceled: s, filePath: r } = await x.showSaveDialog({
+    title: "Guardar transcripción",
+    defaultPath: "transcripcion.docx",
+    // 👈 cambia esto
+    filters: [{ name: "Word Document", extensions: ["docx"] }]
   });
-  let s = "", c = "";
-  r.stdout.on("data", (t) => {
-    s += t.toString();
-  }), r.stderr.on("data", (t) => {
-    c += t.toString();
-  }), r.on("close", (t) => {
-    t === 0 ? d(s || "✅ Transcripción completada") : p(
-      new Error(`❌ Error al ejecutar Python/EXE (code ${t})
-${c}`)
-    );
-  });
-}));
+  return s ? null : r;
+});
+p.handle(
+  "run-transcriptor",
+  async (s, r, c) => new Promise((h, m) => {
+    const w = o.join(t, "../python/dist/transcription.exe"), f = o.join(
+      t,
+      "../python/venv/Scripts/python.exe"
+    ), u = e.isPackaged ? [r, c] : [
+      o.join(t, "../python/transcription.py"),
+      r,
+      c
+    ], i = g(e.isPackaged ? w : f, u, {
+      cwd: o.join(t, "../python")
+    });
+    let l = "", d = "";
+    i.stdout.on("data", (n) => {
+      l += n.toString();
+    }), i.stderr.on("data", (n) => {
+      d += n.toString();
+    }), i.on("close", (n) => {
+      n === 0 ? h(l || "✅ Transcripción completada") : m(
+        new Error(
+          `❌ Error al ejecutar Python/EXE (code ${n})
+${d}`
+        )
+      );
+    });
+  })
+);
 e.on("window-all-closed", () => {
   process.platform !== "darwin" && e.quit();
 });

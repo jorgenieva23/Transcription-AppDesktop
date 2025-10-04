@@ -1,1 +1,1 @@
-"use strict";const r=require("electron");r.contextBridge.exposeInMainWorld("electronAPI",{runTranscriptor:e=>r.ipcRenderer.invoke("run-transcriptor",e)});
+"use strict";const e=require("electron");e.contextBridge.exposeInMainWorld("electronAPI",{runTranscriptor:(r,n)=>e.ipcRenderer.invoke("run-transcriptor",r,n),showSaveDialog:()=>e.ipcRenderer.invoke("show-save-dialog")});

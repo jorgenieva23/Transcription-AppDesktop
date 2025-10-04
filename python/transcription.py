@@ -5,18 +5,16 @@ import subprocess
 from docx import Document
 
 if getattr(sys, "frozen", False):
-    BASE_DIR = sys._MEIPASS
+    BASE_DIR = sys._MEIPASS  # PyInstaller
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+AUDIO_FOLDER = os.path.join(BASE_DIR, "audios")
+os.makedirs(AUDIO_FOLDER, exist_ok=True)
+
 FFMPEG_BIN = os.path.join(BASE_DIR, "bin", "ffmpeg.exe")
 
-VIDEO_FOLDER = os.path.join(BASE_DIR, "videos")
-AUDIO_FOLDER = os.path.join(BASE_DIR, "audios")
-
 def extraer_audio(video_path, audio_path):
-    os.makedirs(AUDIO_FOLDER, exist_ok=True)
-
     cmd = [
         FFMPEG_BIN,
         "-i", video_path,
@@ -27,28 +25,114 @@ def extraer_audio(video_path, audio_path):
         "-y",
         audio_path
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd, check=True)
 
-def main(output_docx):
+def transcribir_archivo(input_file, output_file):
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"No se encontró el archivo: {input_file}")
+
     model = whisper.load_model("base")
 
-    doc = Document()
+    # Si es video, extraer audio temporal
+    if input_file.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
+        audio_path = os.path.join(
+            AUDIO_FOLDER, os.path.basename(input_file).rsplit(".", 1)[0] + ".wav"
+        )
+        extraer_audio(input_file, audio_path)
+    else:
+        audio_path = input_file
 
-    for file_name in os.listdir(VIDEO_FOLDER):
-        if file_name.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
-            video_path = os.path.join(VIDEO_FOLDER, file_name)
-            audio_path = os.path.join(AUDIO_FOLDER, file_name.rsplit(".", 1)[0] + ".wav")
+    # Transcripción con Whisper
+    result = model.transcribe(audio_path)
+    texto = result["text"]
 
-            extraer_audio(video_path, audio_path)
-            result = model.transcribe(audio_path)
-            doc.add_heading(f"Transcripción de {file_name}", level=2)
-            doc.add_paragraph(result["text"])
+    # Guardado flexible según extensión
+    if output_file.lower().endswith(".txt"):
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(f"Transcripción de {os.path.basename(input_file)}\n\n")
+            f.write(texto)
+    else:  # por defecto .docx
+        doc = Document()
+        doc.add_heading(f"Transcripción de {os.path.basename(input_file)}", level=2)
+        doc.add_paragraph(texto)
+        doc.save(output_file)
 
-    doc.save(output_docx)
+    # Limpiar audio temporal si se creó
+    if audio_path != input_file and os.path.exists(audio_path):
+        os.remove(audio_path)
+
+    return f"✅ Transcripción completada en {output_file}"
 
 if __name__ == "__main__":
-    output_file = sys.argv[1] if len(sys.argv) > 1 else "transcripcion.docx"
-    main(output_file)
+    if len(sys.argv) < 3:
+        print("Uso: python transcription.py archivo_entrada salida.(docx|txt)")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+
+    try:
+        mensaje = transcribir_archivo(input_file, output_file)
+        print(mensaje)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+
+
+
+# import os
+# import sys
+# import whisper
+# import subprocess
+# from docx import Document
+
+# if getattr(sys, "frozen", False):
+#     BASE_DIR = sys._MEIPASS
+# else:
+#     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# FFMPEG_BIN = os.path.join(BASE_DIR, "bin", "ffmpeg.exe")
+
+# VIDEO_FOLDER = os.path.join(BASE_DIR, "videos")
+# AUDIO_FOLDER = os.path.join(BASE_DIR, "audios")
+
+# def extraer_audio(video_path, audio_path):
+#     os.makedirs(AUDIO_FOLDER, exist_ok=True)
+
+#     cmd = [
+#         FFMPEG_BIN,
+#         "-i", video_path,
+#         "-vn",
+#         "-ac", "1",
+#         "-ar", "16000",
+#         "-c:a", "pcm_s16le",
+#         "-y",
+#         audio_path
+#     ]
+#     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+# def main(output_docx):
+#     model = whisper.load_model("base")
+
+#     doc = Document()
+
+#     for file_name in os.listdir(VIDEO_FOLDER):
+#         if file_name.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
+#             video_path = os.path.join(VIDEO_FOLDER, file_name)
+#             audio_path = os.path.join(AUDIO_FOLDER, file_name.rsplit(".", 1)[0] + ".wav")
+
+#             extraer_audio(video_path, audio_path)
+#             result = model.transcribe(audio_path)
+#             doc.add_heading(f"Transcripción de {file_name}", level=2)
+#             doc.add_paragraph(result["text"])
+
+#     doc.save(output_docx)
+
+# if __name__ == "__main__":
+#     output_file = sys.argv[1] if len(sys.argv) > 1 else "transcripcion.docx"
+#     main(output_file)
 
 
 

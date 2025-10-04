@@ -8,12 +8,18 @@
     "output": "release/${version}"
   },
   "files": [
-    "dist",
+    "dist/**/*",
     "dist-electron",
     "python/dist/transcriptor.exe",
     "python/videos/**/*",
     "python/audios/**/*",
     "python/bin/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "python/bin/ffmpeg.exe",
+      "to": "bin/ffmpeg.exe"
+    }
   ],
   "mac": {
     "target": [
