@@ -1,10 +1,1 @@
-"use strict";
-const electron = require("electron");
-const electronAPI = {
-  runTranscriptor: (inputPath, outputPath) => electron.ipcRenderer.invoke("run-transcriptor", inputPath, outputPath),
-  showSaveDialog: () => electron.ipcRenderer.invoke("show-save-dialog"),
-  onProgress: (callback) => electron.ipcRenderer.on("transcriptor-progress", (_, data) => callback(data)),
-  onComplete: (callback) => electron.ipcRenderer.on("transcriptor-complete", (_, data) => callback(data)),
-  onError: (callback) => electron.ipcRenderer.on("transcriptor-error", (_, data) => callback(data))
-};
-electron.contextBridge.exposeInMainWorld("electronAPI", electronAPI);
+"use strict";const e=require("electron"),t={runTranscriptor:(r,n)=>e.ipcRenderer.invoke("run-transcriptor",r,n),showSaveDialog:()=>e.ipcRenderer.invoke("show-save-dialog"),onProgress:r=>e.ipcRenderer.on("transcriptor-progress",(n,o)=>r(o)),onComplete:r=>e.ipcRenderer.on("transcriptor-complete",(n,o)=>r(o)),onError:r=>e.ipcRenderer.on("transcriptor-error",(n,o)=>r(o))};e.contextBridge.exposeInMainWorld("electronAPI",t);

@@ -84,12 +84,12 @@ def transcribir_archivo(input_file, output_file):
         doc.add_paragraph(texto)
         doc.save(output_file)
 
-    print("Progress: 100% - Completado ✅", flush=True)
+    print("Progress: 100% - Completado", flush=True)
 
     if audio_path != input_file and os.path.exists(audio_path):
         os.remove(audio_path)
 
-    return f"✅ Transcripción completada en {output_file}"
+    return f"Transcripción completada en {output_file}"
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

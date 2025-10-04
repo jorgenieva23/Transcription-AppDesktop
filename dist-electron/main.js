@@ -1,61 +1,64 @@
-import path from "path";
-import { fileURLToPath } from "url";
-import { spawn } from "child_process";
-import { app, ipcMain, dialog, BrowserWindow } from "electron";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-let win = null;
-function createWindow() {
-  win = new BrowserWindow({
+import o from "path";
+import { fileURLToPath as f } from "url";
+import { spawn as u } from "child_process";
+import { app as t, ipcMain as g, dialog as y, BrowserWindow as w } from "electron";
+import P from "fs";
+const x = f(import.meta.url), s = o.dirname(x);
+let l = null;
+function j() {
+  l = new w({
     width: 1e3,
     height: 700,
     webPreferences: {
-      contextIsolation: true,
-      preload: path.join(__dirname, "preload.mjs")
+      contextIsolation: !0,
+      preload: o.join(s, "preload.mjs")
     }
-  });
-  if (app.isPackaged) {
-    win.loadFile(path.join(__dirname, "../dist/index.html"));
-  } else {
-    win.loadURL("http://localhost:5173");
-  }
+  }), t.isPackaged ? l.loadFile(o.join(s, "../dist/index.html")) : l.loadURL("http://localhost:5173");
 }
-app.whenReady().then(createWindow);
-ipcMain.handle("show-save-dialog", async () => {
-  const { canceled, filePath } = await dialog.showSaveDialog({
+t.whenReady().then(j);
+g.handle("show-save-dialog", async () => {
+  const { canceled: m, filePath: i } = await y.showSaveDialog({
     title: "Guardar transcripción",
     defaultPath: "transcripcion.docx",
     // 👈 cambia esto
     filters: [{ name: "Word Document", extensions: ["docx"] }]
   });
-  return canceled ? null : filePath;
+  return m ? null : i;
 });
-ipcMain.handle(
+g.handle(
   "run-transcriptor",
-  async (event, inputPath, outputPath) => {
-    const win2 = BrowserWindow.getFocusedWindow();
-    const exePath = path.join(__dirname, "../python/dist/transcription.exe");
-    const pythonExe = path.join(__dirname, "../python/venv/Scripts/python.exe");
-    const args = app.isPackaged ? [inputPath, outputPath] : [path.join(__dirname, "../python/transcription.py"), inputPath, outputPath];
-    const py = spawn(app.isPackaged ? exePath : pythonExe, args, {
-      cwd: path.join(__dirname, "../python")
-    });
-    py.stdout.on("data", (data) => {
-      const msg = data.toString();
-      console.log(msg);
-      win2 == null ? void 0 : win2.webContents.send("transcriptor-progress", msg);
-    });
-    py.stderr.on("data", (data) => {
-      win2 == null ? void 0 : win2.webContents.send("transcriptor-error", data.toString());
-    });
-    py.on("close", (code) => {
-      win2 == null ? void 0 : win2.webContents.send(
+  async (m, i, h) => {
+    const a = w.getFocusedWindow() || l;
+    if (!a) {
+      console.error("No se pudo obtener la ventana para enviar mensajes.");
+      return;
+    }
+    let r, d, c;
+    t.isPackaged ? (r = o.join(
+      process.resourcesPath,
+      "python",
+      "dist",
+      "transcription.exe"
+    ), d = [i, h], c = o.join(process.resourcesPath, "python")) : (r = o.join(s, "../python/venv/Scripts/python.exe"), d = [
+      o.join(s, "../python/transcription.py"),
+      i,
+      h
+    ], c = o.join(s, "../python")), console.log("Empaquetado:", t.isPackaged), console.log("Ruta comando:", r), console.log("Existe:", P.existsSync(r)), console.log("Working dir:", c);
+    const p = u(r, d, { cwd: c });
+    p.stdout.on("data", (e) => {
+      const n = e.toString().trim();
+      n && (console.log(`[Python/Stdout]: ${n}`), a.webContents.send("transcriptor-progress", n));
+    }), p.stderr.on("data", (e) => {
+      const n = e.toString().trim();
+      n && (console.error(`[Python/Stderr]: ${n}`), a.webContents.send("transcriptor-error", n));
+    }), p.on("close", (e) => {
+      console.log(`Proceso de transcripción cerrado con código ${e}`), a.webContents.send(
         "transcriptor-complete",
-        code === 0 ? "✅ Completado" : ""
+        e === 0 ? "✅ Transcripción completada exitosamente." : `❌ Falló la transcripción. Código de salida: ${e}`
       );
     });
   }
 );
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+t.on("window-all-closed", () => {
+  process.platform !== "darwin" && t.quit();
 });
