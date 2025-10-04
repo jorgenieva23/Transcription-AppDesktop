@@ -39,7 +39,6 @@ def transcribir_archivo(input_file, output_file):
     model = whisper.load_model("base")
     print("Progress: 15% - Modelo cargado correctamente.", flush=True)
 
-    # Si es video, extraer audio temporal
     if input_file.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
         print("Progress: 25% - Extrayendo audio del video...", flush=True)
         audio_path = os.path.join(
@@ -51,7 +50,6 @@ def transcribir_archivo(input_file, output_file):
 
     print("Progress: 35% - Preparando audio...", flush=True)
 
-    # Dividir audio en fragmentos de 30s
     data, samplerate = sf.read(audio_path)
     duration = len(data) / samplerate
     segment_duration = 30  # segundos
@@ -88,7 +86,6 @@ def transcribir_archivo(input_file, output_file):
 
     print("Progress: 100% - Completado ✅", flush=True)
 
-    # Limpiar audio temporal
     if audio_path != input_file and os.path.exists(audio_path):
         os.remove(audio_path)
 
