@@ -1,72 +1,79 @@
-import { useState, useRef } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/electron-vite.animate.svg";
-import "./App.css";
-
-type ElectronAPI = {
-  runTranscriptor: (file: string, outputPath: string) => Promise<string>;
-  showSaveDialog: () => Promise<string | undefined>;
-};
+import { useState, useRef, useEffect } from "react";
+import "./App.css"
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI: {
+      onProgress: (callback: (msg: string) => void) => void;
+      onComplete: (callback: (msg: string) => void) => void;
+      onError: (callback: (err: string) => void) => void;
+      showSaveDialog: () => Promise<string | undefined>;
+      runTranscriptor: (inputPath: string, outputPath: string) => Promise<string>;
+    };
   }
 }
 
 function App() {
-  const [count, setCount] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState("Esperando archivo...");
+  const [progress, setProgress] = useState(0);
+  const [completed, setCompleted] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleTranscribir = async () => {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) {
-      alert("Seleccioná un archivo primero");
-      return;
-    }
+  useEffect(() => {
+    window.electronAPI.onProgress((msg) => {
+      setStatus(msg);
+      const match = msg.match(/(\d+)%/);
+      if (match) setProgress(Number(match[1]));
+    });
 
-    // Pedir ruta de guardado al usuario
-    const outputPath = await window.electronAPI.showSaveDialog();
-    if (!outputPath) return;
+    window.electronAPI.onComplete((msg) => {
+      setCompleted(true);
+      setStatus(msg);
+      setProgress(100);
+    });
 
+    window.electronAPI.onError((err) => {
+      setStatus(`Error: ${err}`);
+    });
+  }, []);
+
+  const handleRun = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return alert("Seleccioná un archivo primero");
+    const inputPath =
+      file && 'path' in file
+        ? (file as File & { path: string }).path
+        : file && 'name' in file
+        ? (file as File).name
+        : ""; // Para compatibilidad
+    const output = await window.electronAPI.showSaveDialog();
+    if (!output) return;
+
+    setCompleted(false);
+    setProgress(0);
+    setStatus("Iniciando...");
     try {
-      const result = await window.electronAPI.runTranscriptor(
-        file.path,
-        outputPath
-      );
-      alert(result);
+      const result = await window.electronAPI.runTranscriptor(inputPath, output);
+      setStatus(result);
     } catch (err) {
-      alert("Ocurrió un error, revisá la consola");
+      setStatus("Error al transcribir");
     }
   };
 
   return (
-    <>
-      <div>
-        <a href="https://electron-vite.github.io" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
+    <div className="app">
+      <h1>Transcriptor IA</h1>
+      <input ref={fileRef} type="file" accept="video/*,audio/*" />
+      <button onClick={handleRun}>Transcribir</button>
 
-        <input type="file" ref={fileInputRef} accept="video/*,audio/*" />
-        <button onClick={handleTranscribir}>Transcribir video/audio</button>
-
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+      <div className="progress-container">
+        <p>{status}</p>
+        <div className="progress-bar">
+          <div className="progress" style={{ width: `${progress}%` }}></div>
+        </div>
+        {completed && <p>✅ Listo</p>}
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   );
 }
 

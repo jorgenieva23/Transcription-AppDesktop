@@ -40,62 +40,90 @@ ipcMain.handle("show-save-dialog", async () => {
   return canceled ? null : filePath;
 });
 
+// ipcMain.handle(
+//   "run-transcriptor",
+//   async (_, inputPath: string, outputPath: string) => {
+//     return new Promise((resolve, reject) => {
+//       const exePath = path.join(__dirname, "../python/dist/transcription.exe");
+
+//       const pythonExe = path.join(
+//         __dirname,
+//         "../python/venv/Scripts/python.exe"
+//       );
+
+//       const args = app.isPackaged
+//         ? [inputPath, outputPath]
+//         : [
+//             path.join(__dirname, "../python/transcription.py"),
+//             inputPath,
+//             outputPath,
+//           ];
+
+//       const py = spawn(app.isPackaged ? exePath : pythonExe, args, {
+//         cwd: path.join(__dirname, "../python"),
+//       });
+
+//       let stdout = "";
+//       let stderr = "";
+
+//       py.stdout.on("data", (data) => {
+//         stdout += data.toString();
+//       });
+
+//       py.stderr.on("data", (data) => {
+//         stderr += data.toString();
+//       });
+
+//       py.on("close", (code) => {
+//         if (code === 0) {
+//           resolve(stdout || "✅ Transcripción completada");
+//         } else {
+//           reject(
+//             new Error(
+//               `❌ Error al ejecutar Python/EXE (code ${code})\n${stderr}`
+//             )
+//           );
+//         }
+//       });
+//     });
+//   }
+// );
+
 ipcMain.handle(
   "run-transcriptor",
-  async (_, inputPath: string, outputPath: string) => {
-    return new Promise((resolve, reject) => {
-      // 🔹 Ruta al EXE standalone (producción)
-      const exePath = path.join(__dirname, "../python/dist/transcription.exe");
+  async (event, inputPath: string, outputPath: string) => {
+    const win = BrowserWindow.getFocusedWindow();
+    const exePath = path.join(__dirname, "../python/dist/transcription.exe");
+    const pythonExe = path.join(__dirname, "../python/venv/Scripts/python.exe");
 
-      // 🔹 En desarrollo: se puede usar Python + script
-      const pythonExe = path.join(
-        __dirname,
-        "../python/venv/Scripts/python.exe"
+    const args = app.isPackaged
+      ? [inputPath, outputPath]
+      : [path.join(__dirname, "../python/transcription.py"), inputPath, outputPath];
+
+    const py = spawn(app.isPackaged ? exePath : pythonExe, args, {
+      cwd: path.join(__dirname, "../python"),
+    });
+
+    py.stdout.on("data", (data) => {
+      const msg = data.toString();
+      console.log(msg);
+      // Envía mensaje a React
+      win?.webContents.send("transcriptor-progress", msg);
+    });
+
+    py.stderr.on("data", (data) => {
+      win?.webContents.send("transcriptor-error", data.toString());
+    });
+
+    py.on("close", (code) => {
+      win?.webContents.send(
+        "transcriptor-complete",
+        code === 0 ? "✅ Completado" : ""
       );
-      // o ruta al venv si querés
-
-      // 🔹 Argumentos según si estamos en producción o desarrollo
-      const args = app.isPackaged
-        ? [inputPath, outputPath] // input primero, output segundo
-        : [
-            path.join(__dirname, "../python/transcription.py"),
-            inputPath,
-            outputPath,
-          ];
-
-      // 🔹 Ejecutar proceso
-      const py = spawn(app.isPackaged ? exePath : pythonExe, args, {
-        cwd: path.join(__dirname, "../python"),
-      });
-
-      let stdout = "";
-      let stderr = "";
-
-      // Captura stdout
-      py.stdout.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      // Captura errores
-      py.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      // Termina proceso
-      py.on("close", (code) => {
-        if (code === 0) {
-          resolve(stdout || "✅ Transcripción completada");
-        } else {
-          reject(
-            new Error(
-              `❌ Error al ejecutar Python/EXE (code ${code})\n${stderr}`
-            )
-          );
-        }
-      });
     });
   }
 );
+
 
 // Cerrar app cuando se cierren todas las ventanas (excepto macOS)
 app.on("window-all-closed", () => {

@@ -2,7 +2,10 @@ import os
 import sys
 import whisper
 import subprocess
+import math
+import tempfile
 from docx import Document
+import soundfile as sf
 
 if getattr(sys, "frozen", False):
     BASE_DIR = sys._MEIPASS  # PyInstaller
@@ -31,10 +34,14 @@ def transcribir_archivo(input_file, output_file):
     if not os.path.exists(input_file):
         raise FileNotFoundError(f"No se encontró el archivo: {input_file}")
 
+    print("Progress: 5% - Iniciando transcripción...", flush=True)
+
     model = whisper.load_model("base")
+    print("Progress: 15% - Modelo cargado correctamente.", flush=True)
 
     # Si es video, extraer audio temporal
     if input_file.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
+        print("Progress: 25% - Extrayendo audio del video...", flush=True)
         audio_path = os.path.join(
             AUDIO_FOLDER, os.path.basename(input_file).rsplit(".", 1)[0] + ".wav"
         )
@@ -42,22 +49,46 @@ def transcribir_archivo(input_file, output_file):
     else:
         audio_path = input_file
 
-    # Transcripción con Whisper
-    result = model.transcribe(audio_path)
-    texto = result["text"]
+    print("Progress: 35% - Preparando audio...", flush=True)
 
-    # Guardado flexible según extensión
+    # Dividir audio en fragmentos de 30s
+    data, samplerate = sf.read(audio_path)
+    duration = len(data) / samplerate
+    segment_duration = 30  # segundos
+    total_segments = math.ceil(duration / segment_duration)
+    temp_dir = tempfile.mkdtemp()
+
+    textos = []
+    for i in range(total_segments):
+        start = i * segment_duration
+        end = min((i + 1) * segment_duration, duration)
+        segment_data = data[int(start * samplerate):int(end * samplerate)]
+
+        segment_path = os.path.join(temp_dir, f"segment_{i}.wav")
+        sf.write(segment_path, segment_data, samplerate)
+
+        progress = int(40 + (i / total_segments) * 55)
+        print(f"Progress: {progress}% - Transcribiendo segmento {i + 1}/{total_segments}...", flush=True)
+
+        result = model.transcribe(segment_path)
+        textos.append(result["text"])
+
+    texto = "\n".join(textos)
+
+    print("Progress: 95% - Guardando archivo...", flush=True)
     if output_file.lower().endswith(".txt"):
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(f"Transcripción de {os.path.basename(input_file)}\n\n")
             f.write(texto)
-    else:  # por defecto .docx
+    else:
         doc = Document()
         doc.add_heading(f"Transcripción de {os.path.basename(input_file)}", level=2)
         doc.add_paragraph(texto)
         doc.save(output_file)
 
-    # Limpiar audio temporal si se creó
+    print("Progress: 100% - Completado ✅", flush=True)
+
+    # Limpiar audio temporal
     if audio_path != input_file and os.path.exists(audio_path):
         os.remove(audio_path)
 
@@ -77,6 +108,8 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+
 
 
 

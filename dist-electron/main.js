@@ -1,57 +1,61 @@
-import o from "path";
-import { fileURLToPath as y } from "url";
-import { spawn as g } from "child_process";
-import { app as e, ipcMain as p, dialog as x, BrowserWindow as j } from "electron";
-const P = y(import.meta.url), t = o.dirname(P);
-let a = null;
-function E() {
-  a = new j({
+import path from "path";
+import { fileURLToPath } from "url";
+import { spawn } from "child_process";
+import { app, ipcMain, dialog, BrowserWindow } from "electron";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+let win = null;
+function createWindow() {
+  win = new BrowserWindow({
     width: 1e3,
     height: 700,
     webPreferences: {
-      contextIsolation: !0,
-      preload: o.join(t, "preload.mjs")
+      contextIsolation: true,
+      preload: path.join(__dirname, "preload.mjs")
     }
-  }), e.isPackaged ? a.loadFile(o.join(t, "../dist/index.html")) : a.loadURL("http://localhost:5173");
+  });
+  if (app.isPackaged) {
+    win.loadFile(path.join(__dirname, "../dist/index.html"));
+  } else {
+    win.loadURL("http://localhost:5173");
+  }
 }
-e.whenReady().then(E);
-p.handle("show-save-dialog", async () => {
-  const { canceled: s, filePath: r } = await x.showSaveDialog({
+app.whenReady().then(createWindow);
+ipcMain.handle("show-save-dialog", async () => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
     title: "Guardar transcripción",
     defaultPath: "transcripcion.docx",
     // 👈 cambia esto
     filters: [{ name: "Word Document", extensions: ["docx"] }]
   });
-  return s ? null : r;
+  return canceled ? null : filePath;
 });
-p.handle(
+ipcMain.handle(
   "run-transcriptor",
-  async (s, r, c) => new Promise((h, m) => {
-    const w = o.join(t, "../python/dist/transcription.exe"), f = o.join(
-      t,
-      "../python/venv/Scripts/python.exe"
-    ), u = e.isPackaged ? [r, c] : [
-      o.join(t, "../python/transcription.py"),
-      r,
-      c
-    ], i = g(e.isPackaged ? w : f, u, {
-      cwd: o.join(t, "../python")
+  async (event, inputPath, outputPath) => {
+    const win2 = BrowserWindow.getFocusedWindow();
+    const exePath = path.join(__dirname, "../python/dist/transcription.exe");
+    const pythonExe = path.join(__dirname, "../python/venv/Scripts/python.exe");
+    const args = app.isPackaged ? [inputPath, outputPath] : [path.join(__dirname, "../python/transcription.py"), inputPath, outputPath];
+    const py = spawn(app.isPackaged ? exePath : pythonExe, args, {
+      cwd: path.join(__dirname, "../python")
     });
-    let l = "", d = "";
-    i.stdout.on("data", (n) => {
-      l += n.toString();
-    }), i.stderr.on("data", (n) => {
-      d += n.toString();
-    }), i.on("close", (n) => {
-      n === 0 ? h(l || "✅ Transcripción completada") : m(
-        new Error(
-          `❌ Error al ejecutar Python/EXE (code ${n})
-${d}`
-        )
+    py.stdout.on("data", (data) => {
+      const msg = data.toString();
+      console.log(msg);
+      win2 == null ? void 0 : win2.webContents.send("transcriptor-progress", msg);
+    });
+    py.stderr.on("data", (data) => {
+      win2 == null ? void 0 : win2.webContents.send("transcriptor-error", data.toString());
+    });
+    py.on("close", (code) => {
+      win2 == null ? void 0 : win2.webContents.send(
+        "transcriptor-complete",
+        code === 0 ? "✅ Completado" : ""
       );
     });
-  })
+  }
 );
-e.on("window-all-closed", () => {
-  process.platform !== "darwin" && e.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
