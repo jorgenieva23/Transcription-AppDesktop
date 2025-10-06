@@ -1,54 +1,57 @@
-// @see - https://www.electron.build/configuration/configuration
 {
-  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
-  "asar": true,
-  "productName": "transcriptor",
-  "directories": {
-    "output": "release/${version}"
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "com.lexisai.app",
+  productName: "LexisAI",
+  asar: true,
+
+  directories: {
+    output: "release/${version}",
+    buildResources: "build",
   },
-  "files": [
+
+  files: [
     "dist/**/*",
-    "dist-electron",
-    "python/dist/transcriptor.exe",
-    "python/videos/**/*",
-    "python/audios/**/*",
-    "python/bin/**/*"
+    "dist-electron/**/*",
+    "!python/venv/**/*",
+    "!python/dist/**/*",
+    "!python/build/**/*",
+    "!python/transcription.py",
+    "!python/transcription.spec",
   ],
-  "extraResources": [
+
+  extraResources: [
+    { from: "build/icon.ico", to: "build/icon.ico" },
     {
-      "from": "python/bin/ffmpeg.exe",
-      "to": "bin/ffmpeg.exe"
-    }
+      from: "python/dist/transcription.exe",
+      to: "python/dist/transcription.exe",
+    },
+    { from: "python/bin/ffmpeg.exe", to: "python/bin/ffmpeg.exe" },
+    { from: "python/audios", to: "python/audios" },
   ],
-  "mac": {
-    "target": [
-      "dmg"
-    ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+
+  win: {
+    target: [{ target: "nsis", arch: ["x64"] }],
+    icon: "build/icon.ico",
+    executableName: "LexisAI",
+    artifactName: "${productName}-Setup-${version}.${ext}",
   },
-  "win": {
-    "target": [
-      {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
-      }
-    ],
-    "signAndEditExecutable": false,
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false,
   },
-  "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+
+  mac: {
+    target: ["dmg"],
+    icon: "build/icon.icns",
+    artifactName: "${productName}-Mac-${version}-Installer.${ext}",
   },
-  "linux": {
-    "target": [
-      "AppImage"
-    ],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
-  }
+
+  linux: {
+    target: ["AppImage"],
+    icon: "build/icon.png",
+    artifactName: "${productName}-Linux-${version}.${ext}",
+  },
 }
