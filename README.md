@@ -61,6 +61,7 @@ python -m venv venv
 venv\Scripts\activate   # Windows
 source venv/bin/activate # Linux/Mac
 pip install -r requirements.txt
+pyinstaller --onefile --add-data "bin/ffmpeg.exe;bin" --add-data "venv\Lib\site-packages\whisper\assets;whisper/assets" --add-data "venv\Lib\site-packages\torch_directml;torch_directml" transcription.py
 ```
 
 4. Instalar FFmpeg
@@ -75,19 +76,13 @@ Descargalo desde el sitio oficial:
 python/bin/
 ```
 ▶️ Uso en desarrollo
-1. Colocar videos
-
- - Copia tus archivos .mp4, .avi, .mov o .mkv en la carpeta:
-```
-python/videos/
-```
-2. Ejecutar la app
+1. Ejecutar la app
 
  - En la raíz del proyecto:
 ```
 npm run dev
 ```
-3. Transcribir
+2. Transcribir
 
 En la aplicación de escritorio, hacé clic en "Transcribir video".
 El resultado se guarda en:
