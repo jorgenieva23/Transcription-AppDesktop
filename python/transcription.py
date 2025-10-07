@@ -1,14 +1,23 @@
 import os
 import sys
 import whisper
+import torch
 import subprocess
 import math
 import tempfile
+import shutil
 from docx import Document
 import soundfile as sf
+import numpy as np
+
+try:
+    import torch_directml
+    DML_AVAILABLE = True
+except ImportError:
+    DML_AVAILABLE = False
 
 if getattr(sys, "frozen", False):
-    BASE_DIR = sys._MEIPASS  # PyInstaller
+    BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -16,6 +25,26 @@ AUDIO_FOLDER = os.path.join(BASE_DIR, "audios")
 os.makedirs(AUDIO_FOLDER, exist_ok=True)
 
 FFMPEG_BIN = os.path.join(BASE_DIR, "bin", "ffmpeg.exe")
+
+def get_device():
+    try:
+        if torch.cuda.is_available():
+            print("GPU NVIDIA detectada (CUDA).", flush=True)
+            return "cuda"
+        elif DML_AVAILABLE:
+            print("GPU AMD/Intel detectada (DirectML). Probando compatibilidad...", flush=True)
+            try:
+                _ = torch_directml.tensor([1.0], device=torch_directml.device())
+                return torch_directml.device()
+            except Exception:
+                print("DirectML no compatible con operaciones de Whisper. Usando CPU.", flush=True)
+                return "cpu"
+        else:
+            print("No se detectó GPU compatible, usando CPU.", flush=True)
+            return "cpu"
+    except Exception as e:
+        print(f"Error detectando GPU: {e}. Usando CPU.", flush=True)
+        return "cpu"
 
 def extraer_audio(video_path, audio_path):
     cmd = [
@@ -28,83 +57,212 @@ def extraer_audio(video_path, audio_path):
         "-y",
         audio_path
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-def transcribir_archivo(input_file, output_file):
+def transcribir_archivo(input_file, output_file, model_size="base"):
     if not os.path.exists(input_file):
         raise FileNotFoundError(f"No se encontró el archivo: {input_file}")
 
-    print("Progress: 5% - Iniciando transcripción...", flush=True)
+    print(f"Progress: 5% - Iniciando transcripción con modelo '{model_size}'...", flush=True)
 
-    model = whisper.load_model("base")
+    device = get_device()
+    model = whisper.load_model(model_size, device=device if device != "cpu" else None)
+
+    if device != "cpu":
+         model = model.to(device)
+
     print("Progress: 15% - Modelo cargado correctamente.", flush=True)
+
+    audio_to_process_path = input_file
 
     if input_file.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
         print("Progress: 25% - Extrayendo audio del video...", flush=True)
-        audio_path = os.path.join(
-            AUDIO_FOLDER, os.path.basename(input_file).rsplit(".", 1)[0] + ".wav"
+        audio_temp_file = os.path.join(
+             AUDIO_FOLDER, os.path.basename(input_file).rsplit(".", 1)[0] + ".wav"
         )
-        extraer_audio(input_file, audio_path)
-    else:
-        audio_path = input_file
+        extraer_audio(input_file, audio_temp_file)
+        audio_to_process_path = audio_temp_file
 
-    print("Progress: 35% - Preparando audio...", flush=True)
+    print("Progress: 35% - Leyendo y preparando audio en memoria...", flush=True)
 
-    data, samplerate = sf.read(audio_path)
+    data, samplerate = sf.read(audio_to_process_path, dtype='float32') 
+
+    if data.ndim > 1:
+        data = np.mean(data, axis=1)
+
     duration = len(data) / samplerate
-    segment_duration = 30  # segundos
+    segment_duration = 30
     total_segments = math.ceil(duration / segment_duration)
-    temp_dir = tempfile.mkdtemp()
 
     textos = []
-    for i in range(total_segments):
-        start = i * segment_duration
-        end = min((i + 1) * segment_duration, duration)
-        segment_data = data[int(start * samplerate):int(end * samplerate)]
 
-        segment_path = os.path.join(temp_dir, f"segment_{i}.wav")
-        sf.write(segment_path, segment_data, samplerate)
+
+    for i in range(total_segments):
+        start_sample = int(i * segment_duration * samplerate)
+        end_sample = int(min((i + 1) * segment_duration * samplerate, len(data)))
+
+        segment_data = data[start_sample:end_sample]
 
         progress = int(40 + (i / total_segments) * 55)
         print(f"Progress: {progress}% - Transcribiendo segmento {i + 1}/{total_segments}...", flush=True)
 
-        result = model.transcribe(segment_path)
-        textos.append(result["text"])
+        result = model.transcribe(segment_data, fp16=(device != "cpu"))
+        textos.append(result["text"].strip())
 
     texto = "\n".join(textos)
 
     print("Progress: 95% - Guardando archivo...", flush=True)
-    if output_file.lower().endswith(".txt"):
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(f"Transcripción de {os.path.basename(input_file)}\n\n")
-            f.write(texto)
-    else:
-        doc = Document()
-        doc.add_heading(f"Transcripción de {os.path.basename(input_file)}", level=2)
-        doc.add_paragraph(texto)
-        doc.save(output_file)
+    try:
+        if output_file.lower().endswith(".txt"):
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(f"Transcripción de {os.path.basename(input_file)}\n\n")
+                f.write(texto)
+        else:
+            doc = Document()
+            doc.add_heading(f"Transcripción de {os.path.basename(input_file)}", level=2)
+            doc.add_paragraph(texto)
+            doc.save(output_file)
+    except Exception as e:
+        print(f"Advertencia: No se pudo guardar el archivo {output_file}. Error: {e}", flush=True)
+
 
     print("Progress: 100% - Completado", flush=True)
 
-    if audio_path != input_file and os.path.exists(audio_path):
-        os.remove(audio_path)
+    if audio_temp_file and os.path.exists(audio_temp_file):
+        os.remove(audio_temp_file)
 
-    return f" Transcripción completada en {output_file}"
+
+    return f"Transcripción completada en {output_file}"
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Uso: python transcription.py archivo_entrada salida.(docx|txt)")
+        print("Uso: python transcription.py archivo_entrada salida.(docx|txt) [tiny|base|small|medium|large]")
         sys.exit(1)
 
     input_file = sys.argv[1]
     output_file = sys.argv[2]
+    valid_models = ["tiny", "base", "small", "medium", "large"]
+    model_size = sys.argv[3] if len(sys.argv) > 3 else "base"
+    if model_size not in valid_models:
+        print(f"Advertencia: Modelo '{model_size}' no reconocido. Usando 'base'.", flush=True)
+        model_size = "base"
 
     try:
-        mensaje = transcribir_archivo(input_file, output_file)
+        mensaje = transcribir_archivo(input_file, output_file, model_size)
         print(mensaje)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+
+
+# import os
+# import sys
+# import whisper
+# import subprocess
+# import math
+# import tempfile
+# from docx import Document
+# import soundfile as sf
+
+# if getattr(sys, "frozen", False):
+#     BASE_DIR = sys._MEIPASS  # PyInstaller
+# else:
+#     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# AUDIO_FOLDER = os.path.join(BASE_DIR, "audios")
+# os.makedirs(AUDIO_FOLDER, exist_ok=True)
+
+# FFMPEG_BIN = os.path.join(BASE_DIR, "bin", "ffmpeg.exe")
+
+# def extraer_audio(video_path, audio_path):
+#     cmd = [
+#         FFMPEG_BIN,
+#         "-i", video_path,
+#         "-vn",
+#         "-ac", "1",
+#         "-ar", "16000",
+#         "-c:a", "pcm_s16le",
+#         "-y",
+#         audio_path
+#     ]
+#     subprocess.run(cmd, check=True)
+
+# def transcribir_archivo(input_file, output_file):
+#     if not os.path.exists(input_file):
+#         raise FileNotFoundError(f"No se encontró el archivo: {input_file}")
+
+#     print("Progress: 5% - Iniciando transcripción...", flush=True)
+
+#     model = whisper.load_model("base")
+#     print("Progress: 15% - Modelo cargado correctamente.", flush=True)
+
+#     if input_file.lower().endswith((".mp4", ".mkv", ".mov", ".avi")):
+#         print("Progress: 25% - Extrayendo audio del video...", flush=True)
+#         audio_path = os.path.join(
+#             AUDIO_FOLDER, os.path.basename(input_file).rsplit(".", 1)[0] + ".wav"
+#         )
+#         extraer_audio(input_file, audio_path)
+#     else:
+#         audio_path = input_file
+
+#     print("Progress: 35% - Preparando audio...", flush=True)
+
+#     data, samplerate = sf.read(audio_path)
+#     duration = len(data) / samplerate
+#     segment_duration = 30  # segundos
+#     total_segments = math.ceil(duration / segment_duration)
+#     temp_dir = tempfile.mkdtemp()
+
+#     textos = []
+#     for i in range(total_segments):
+#         start = i * segment_duration
+#         end = min((i + 1) * segment_duration, duration)
+#         segment_data = data[int(start * samplerate):int(end * samplerate)]
+
+#         segment_path = os.path.join(temp_dir, f"segment_{i}.wav")
+#         sf.write(segment_path, segment_data, samplerate)
+
+#         progress = int(40 + (i / total_segments) * 55)
+#         print(f"Progress: {progress}% - Transcribiendo segmento {i + 1}/{total_segments}...", flush=True)
+
+#         result = model.transcribe(segment_path)
+#         textos.append(result["text"])
+
+#     texto = "\n".join(textos)
+
+#     print("Progress: 95% - Guardando archivo...", flush=True)
+#     if output_file.lower().endswith(".txt"):
+#         with open(output_file, "w", encoding="utf-8") as f:
+#             f.write(f"Transcripción de {os.path.basename(input_file)}\n\n")
+#             f.write(texto)
+#     else:
+#         doc = Document()
+#         doc.add_heading(f"Transcripción de {os.path.basename(input_file)}", level=2)
+#         doc.add_paragraph(texto)
+#         doc.save(output_file)
+
+#     print("Progress: 100% - Completado", flush=True)
+
+#     if audio_path != input_file and os.path.exists(audio_path):
+#         os.remove(audio_path)
+
+#     return f" Transcripción completada en {output_file}"
+
+# if __name__ == "__main__":
+#     if len(sys.argv) < 3:
+#         print("Uso: python transcription.py archivo_entrada salida.(docx|txt)")
+#         sys.exit(1)
+
+#     input_file = sys.argv[1]
+#     output_file = sys.argv[2]
+
+#     try:
+#         mensaje = transcribir_archivo(input_file, output_file)
+#         print(mensaje)
+#     except Exception as e:
+#         print(f"Error: {e}")
+#         sys.exit(1)
 
 
 

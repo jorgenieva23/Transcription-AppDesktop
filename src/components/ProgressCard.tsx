@@ -1,4 +1,5 @@
 import React from "react";
+import { FaClock, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 
 interface ProgressCardProps {
   name: string;
@@ -13,26 +14,41 @@ export const ProgressCard: React.FC<ProgressCardProps> = ({
   status,
   completed,
 }) => {
-  // Clase condicional para el color de la barra
-  const progressBarColor = completed
-    ? "bg-green-500" // Verde cuando está completo
-    : progress > 0
-    ? "bg-blue-500" // Azul cuando está en progreso
-    : "bg-gray-500"; // Gris si aún no ha iniciado
+  let progressBarColor = "bg-gray-500";
+  let statusIcon = <FaClock className="w-3 h-3 mr-1 text-gray-400" />;
+  let statusTextColor = "text-gray-400";
+
+  if (completed) {
+    progressBarColor = "bg-green-500";
+    statusIcon = <FaCheckCircle className="w-3 h-3 mr-1 text-green-500" />;
+    statusTextColor = "text-green-500 font-medium";
+  } else if (progress > 0 && progress < 100) {
+    progressBarColor = "bg-blue-500";
+    statusIcon = (
+      <FaClock className="w-3 h-3 mr-1 text-blue-400 animate-spin" />
+    );
+    statusTextColor = "text-blue-400";
+  } else if (status.includes("Error")) {
+    progressBarColor = "bg-red-500";
+    statusIcon = (
+      <FaExclamationTriangle className="w-3 h-3 mr-1 text-red-500" />
+    );
+    statusTextColor = "text-red-500";
+  }
 
   return (
-    // Tarjeta con fondo gris oscuro, padding y esquinas redondeadas
-    <div className="bg-gray-700 p-4 rounded-lg shadow-md border border-gray-600">
-      {/* Cabecera: Nombre y Check de completado */}
-      <div className="flex justify-between items-center mb-1">
-        <h3 className="text-gray-100 font-medium truncate max-w-[80%]">
+    <div className="bg-gray-700 p-4 rounded-lg shadow-xl border border-gray-600 transition-shadow hover:shadow-2xl">
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="text-gray-100 font-medium truncate max-w-[70%] text-base">
           {name}
         </h3>
-        {/* Símbolo de completado (Check Verde) */}
-        {completed && <span className="text-green-500 text-xl ml-2">✅</span>}
-        {/* Muestra el porcentaje si no está completo */}
-        {!completed && progress > 0 && (
+
+        {completed ? (
+          <span className="text-green-500 text-xl ml-2">✅</span>
+        ) : progress > 0 ? (
           <span className="text-sm text-gray-400">{progress}%</span>
+        ) : (
+          <span className="text-sm font-semibold text-gray-300">En espera</span>
         )}
       </div>
 
@@ -43,8 +59,10 @@ export const ProgressCard: React.FC<ProgressCardProps> = ({
         ></div>
       </div>
 
-      {/* Estado/Mensaje de la operación */}
-      <p className="text-xs text-gray-400 italic">{status}</p>
+      <p className={`flex items-center text-xs italic ${statusTextColor}`}>
+        {statusIcon}
+        {status}
+      </p>
     </div>
   );
 };
