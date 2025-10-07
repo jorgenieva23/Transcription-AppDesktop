@@ -1,12 +1,12 @@
 import React from "react";
 import { ProgressCard } from "./ProgressCard";
+import { FaArrowUp } from "react-icons/fa";
 
-// (Asumo que HistoryItem está definido en useTranscriptor o se ha movido aquí)
 interface HistoryItem {
   id: string;
   name: string;
   progress: number;
-  status: string; // Incluimos 'status' para usarlo en ProgressCard
+  status: string;
   completed: boolean;
 }
 
@@ -16,25 +16,33 @@ interface HistoryProps {
 
 export const History: React.FC<HistoryProps> = ({ items }) => {
   return (
-    // Contenedor simple para la lista de tarjetas
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-gray-300 mb-4">
-        Historial de Transcripción
+    <div className="space-y-4 flex-grow">
+      <h2 className="text-xl font-semibold text-gray-200 mb-4 border-b border-gray-700 pb-2">
+        Historial de Transcripciones
       </h2>
       {items.length === 0 ? (
-        <p className="text-gray-500 italic">
-          No hay transcripciones en curso o completadas.
-        </p>
+        <div className="text-center p-8 bg-gray-700/50 rounded-lg border border-gray-600">
+          <FaArrowUp className="w-6 h-6 mb-3 text-blue-400 mx-auto animate-bounce" />
+          <p className="text-gray-400 italic mb-1">
+            No hay transcripciones en curso o completadas.
+          </p>
+          <p className="text-sm text-gray-300 font-medium">
+            ¡Arrastra un archivo o haz click en **"Cargar Archivo"** arriba para
+            empezar!
+          </p>
+        </div>
       ) : (
-        items.map((item) => (
-          <ProgressCard
-            key={item.id}
-            name={item.name}
-            progress={item.progress}
-            status={item.status} // Pasamos el status
-            completed={item.completed}
-          />
-        ))
+        <div className="space-y-4">
+          {items.map((item) => (
+            <ProgressCard
+              key={item.id}
+              name={item.name}
+              progress={item.progress}
+              status={item.status}
+              completed={item.completed}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -9,11 +9,9 @@ declare global {
       showSaveDialog: () => Promise<string | undefined>;
       runTranscriptor: (
         inputPath: string,
-        outputPath: string
+        outputPath: string,
+        modelName: string
       ) => Promise<string>;
-    //   minimizeWindow: () => void;
-    //   maximizeRestoreWindow: () => void;
-    //   closeWindow: () => void;
     };
   }
 }
@@ -65,9 +63,14 @@ export function useTranscriptor() {
     window.electronAPI.onError(handleError);
   }, []);
 
-  const runTranscriptorProcess = async (file: File) => {
+  const runTranscriptorProcess = async (file: File, modelName: string) => {
     const inputPath =
       "path" in file ? (file as File & { path: string }).path : "";
+
+    if (!inputPath) {
+      console.error("El objeto File no contiene una propiedad 'path'.");
+      return;
+    }
     const output = await window.electronAPI.showSaveDialog();
     if (!output) return;
 
@@ -80,7 +83,7 @@ export function useTranscriptor() {
     };
 
     setHistory((prev) => [newItem, ...prev]);
-    await window.electronAPI.runTranscriptor(inputPath, output);
+    await window.electronAPI.runTranscriptor(inputPath, output, modelName);
   };
 
   return {
